@@ -25,7 +25,7 @@ jobs:
       - name: Install and Build
         working-directory: ./frontend
         run: |
-          npm ci
+          npm install
           npm run build
           # Create .nojekyll to prevent GitHub from ignoring files associated with Jekyll
           touch out/.nojekyll
