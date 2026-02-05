@@ -1,0 +1,189 @@
+This is the **Final Master Packet** for the **Truth Engine (PVE)**. It defines every granular feature and provides the three requested documents, fully separated and ready for execution.
+
+---
+
+# DOCUMENT 1: PRODUCT REQUIREMENTS DOCUMENT (PRD)
+
+**Project Name:** Truth Engine (PVE)
+**Version:** Final Build Candidate
+**Target:** High-Reliability Python Debugging
+
+## 1. Executive Summary
+
+The PVE is a "Zero-Trust" code repair platform. It assumes all AI-generated code is broken until proven otherwise. It uses a cloud-based execution sandbox to run code against generated test cases, guaranteeing that any solution presented to the user has actually executed successfully (Exit Code 0) in a clean environment.
+
+## 2. Granular Feature Inventory
+
+### 2.1 The "Editor" Interface (Frontend)
+
+* **Monaco Editor Integration:** Full VS Code-like experience in the browser (syntax highlighting, minimap, line numbers).
+* **Error Annotation:** User can hover over red squiggly lines to see linting errors before submission.
+* **"Smart Paste" Detector:** Automatically detects if the clipboard content contains a stack trace and separates it into the "Error Log" field.
+* **Library Detector:** A regex-based scanner that scans imports (e.g., `import pandas`) and displays a "Detected Libraries" badge list (e.g., `[Pandas 2.2]`, `[Numpy 1.26]`).
+
+### 2.2 The "Verification" Experience
+
+* **Real-Time Console Stream:** A terminal-like window that streams logs via WebSocket.
+* *State 1:* `> Analyzing logic...`
+* *State 2:* `> Spawning AWS Sandbox (ID: xe9-22)...`
+* *State 3:* `> Running Candidate 1... [FAILED - IndexError]`
+* *State 4:* `> Running Candidate 2... [PASSED - 12ms]`
+
+
+* **Diff View:** A side-by-side comparison showing exactly what changed between the User's Broken Code and the Verified Fix.
+* **Execution Proof:** A downloadable text file containing the `STDOUT` and `STDERR` logs of the successful run.
+
+### 2.3 The "History & Learning" Module
+
+* **Session Permalinks:** Every fixed bug gets a unique URL (e.g., `app.truthengine.ai/s/99283`) that can be shared with teammates.
+* **"My Snippets" Library:** A dashboard where users can see their past fixes, searchable by error type (e.g., "Show me all my Regex errors").
+* **Code Export:** "Copy to Clipboard" and "Open in VS Code" buttons.
+
+### 2.4 User Management
+
+* **GitHub/Google Login:** One-click OAuth via AWS Cognito.
+* **Quota Dashboard:** Visual bar showing "Daily Verifications Remaining" (to manage costs).
+
+---
+
+# DOCUMENT 2: TECHNICAL STACK DOCUMENT
+
+**Infrastructure Strategy:** AWS Cloud Native (Compute) + Multi-Model AI (Intelligence).
+
+## 1. The "Brain" (AI Logic Layer)
+
+* **Primary Model:** **Gemini 1.5 Flash** (via Google AI Studio).
+* *Role:* Main logic engine. Generates the `reproduce_issue.py` script and 3 candidate fixes.
+* *Cost:* Free Tier / Low Cost.
+
+
+* **Fallback Model:** **DeepSeek V3** (via API).
+* *Role:* If Gemini returns invalid JSON or fails twice, the system automatically routes to DeepSeek.
+* *Cost:* Extremely low token cost.
+
+
+* **Categorizer:** **Groq (Llama 3)**.
+* *Role:* Instantly classifies the error (e.g., "Logic Error" vs "Syntax Error") to select the right prompt strategy.
+
+
+
+## 2. The "Body" (AWS Cloud Premium)
+
+* **Compute:** **AWS Lambda (Container Image Support)**.
+* *Config:* 1024MB RAM, 10s Timeout.
+* *Base:* Docker Image based on Amazon Linux 2023.
+
+
+* **Orchestration:** **AWS Step Functions**.
+* *Role:* The "State Machine" that manages the parallel execution and retry logic.
+
+
+* **API Layer:** **Amazon API Gateway (WebSocket API)**.
+* *Role:* Maintains a persistent connection to the user's browser to stream logs in real-time.
+
+
+* **Database:** **Amazon DynamoDB** (On-Demand Capacity).
+* *Role:* Stores user sessions, code snippets, and verification results.
+
+
+* **Storage:** **Amazon S3**.
+* *Role:* Stores temporary logs and large payloads that exceed DynamoDB limits.
+
+
+
+## 3. The Frontend
+
+* **Framework:** **Next.js 14** (App Router).
+* **UI Library:** **shadcn/ui** (Tailwind CSS).
+* **State Management:** **Zustand** (Lightweight React state).
+* **Hosting:** **AWS Amplify** (CI/CD connected to GitHub).
+
+---
+
+# DOCUMENT 3: TECHNICAL DESIGN DOCUMENT (TDD)
+
+**Architecture Style:** Event-Driven Serverless Fan-Out.
+
+## 1. System Architecture & Data Flow
+
+### Step 1: Ingestion & Analysis
+
+1. **Client** establishes WebSocket connection (`wss://api.truthengine.ai`).
+2. **Client** sends JSON payload: `{ code, error_log }`.
+3. **API Gateway** triggers **Lambda A (Controller)**.
+4. **Lambda A** calls **Gemini Flash** to generate:
+* `reproduction_script.py` (Must fail with user error).
+* `fix_candidates` (List of 3 Python strings).
+
+
+
+### Step 2: The "Fan-Out" Execution
+
+1. **Lambda A** starts an **AWS Step Function** execution.
+2. **Step Function** enters a `Parallel` state with 3 branches.
+3. Each branch triggers **Lambda B (The Sandbox)** with a specific `fix_candidate`.
+
+### Step 3: The Sandbox Logic (Dockerized Lambda)
+
+Inside the `public.ecr.aws/lambda/python:3.12` container:
+
+1. **Write Files:**
+* `/tmp/fix.py` (The Candidate Code).
+* `/tmp/test.py` (The Reproduction Script).
+
+
+2. **Subprocess Execution:**
+* Run `python /tmp/test.py` (This script imports `fix.py`).
+* *Environment Variables:* `PYTHONPATH=/tmp`, `isolate=true`.
+
+
+3. **Capture:**
+* `stdout`, `stderr`, and `return_code`.
+
+
+4. **Return JSON:** `{ "status": "PASS/FAIL", "logs": "..." }`.
+
+### Step 4: Decision & Response
+
+1. **Step Function** aggregates results from all 3 branches.
+2. **Decision Logic:**
+* Prioritize the Fix with `Exit Code 0` + `Shortest Execution Time`.
+
+
+3. **Lambda C (Notifier)** pushes the Winning Fix to the User via WebSocket.
+4. **Lambda C** writes the session to **DynamoDB**.
+
+## 2. Database Schema (DynamoDB)
+
+**Table:** `PVE_Main`
+
+| Partition Key (PK) | Sort Key (SK) | Attributes | Purpose |
+| --- | --- | --- | --- |
+| `USER#<email>` | `PROFILE` | `{ "tier": "free", "credits": 50 }` | User Profile & Quotas |
+| `SESSION#<uuid>` | `META` | `{ "timestamp": 1707001, "status": "SOLVED" }` | Session Metadata |
+| `SESSION#<uuid>` | `FIX#<id>` | `{ "code": "...", "is_verified": true }` | The Verified Solution |
+| `ERROR_HASH#<hash>` | `SOLUTION` | `{ "fix_id": "...", "confidence": 0.99 }` | **Semantic Cache** (Future Optimization) |
+
+## 3. Security Configuration
+
+* **Network Isolation:**
+* Sandboxes run in Private Subnets.
+* **NACLs (Network ACLs):** Deny all inbound traffic. Allow outbound TCP 443 only to whitelisted PyPI mirrors (optional, for Phase 2).
+
+
+* **IAM Least Privilege:**
+* The Sandbox Lambda has **NO permissions** to access DynamoDB or S3. It can only compute and return values.
+
+
+* **Code Sanitization:**
+* Pre-flight Regex check rejects code containing `os.system`, `subprocess.Popen`, `eval()`, or `exec()` unless strictly required and scoped.
+
+
+
+## 4. Scalability Limits (AWS Premium)
+
+* **Concurrency:** Default 1,000 concurrent Lambdas.
+* *Math:* 1,000 slots / 3 slots per user = **333 Simultaneous Users**.
+
+
+* **Expansion:** Request AWS Quota Increase to 10,000 slots for Series A scale.
