@@ -1,0 +1,4 @@
+{
+    "code": "def add(a, b):\n    return a + b\nprint(add(1, '2'))",
+    "error": "TypeError: unsupported operand type(s) for +: 'int' and 'str'"
+}
